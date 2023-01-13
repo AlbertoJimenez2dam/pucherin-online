@@ -1,5 +1,5 @@
-var host = 'localhost';
-var port = '1234';
+var host = 'alcosmos.net';
+var port = '30005';
 
 var totalChips = 50;
 
