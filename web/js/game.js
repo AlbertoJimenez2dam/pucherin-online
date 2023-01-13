@@ -615,7 +615,7 @@ function doOnline() {
     interactor.innerHTML = 'Conectando con el servidor...';
     send('Conectando con el servidor...');
     
-    socket = new WebSocket('ws://localhost:1234');
+    socket = new WebSocket('ws://' + host + ':' + port);
     
     socket.onopen = function() {
         interactor.innerHTML = '<br>Handshake...';
