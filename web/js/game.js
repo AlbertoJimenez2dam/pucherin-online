@@ -1,5 +1,5 @@
-var host = 'alcosmos.net';
-var port = '30005';
+var host = 'pucherin.alcosmos.net';
+var port = '80';
 
 var totalChips = 50;
 
@@ -615,7 +615,7 @@ function doOnline() {
     interactor.innerHTML = 'Conectando con el servidor...';
     send('Conectando con el servidor...');
     
-    socket = new WebSocket('ws://' + host + ':' + port);
+    socket = new WebSocket('wss://' + host + ':' + port);
     
     socket.onopen = function() {
         interactor.innerHTML = '<br>Handshake...';
@@ -715,7 +715,7 @@ function fillTable() {
         interactor.innerHTML += '<button id="buttonOnline">Online 1vs1</button> ';
         interactor.innerHTML += 'Estado del servidor: <span id="interactorStatus"></span>';
         
-        var statusSocket = new WebSocket('ws://' + host + ':' + port);
+        var statusSocket = new WebSocket('wss://' + host + ':' + port);
         
         statusSocket.onopen = function() {
             statusSocket.send('players');
