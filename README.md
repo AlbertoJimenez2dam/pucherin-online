@@ -4,6 +4,9 @@ Implementación del antiguo juego de mesa español "El Pucherín", con modo 1-5 
 Version 1.0.
 
 ## Cómo jugar
+TODO
+
+## Comandos disponibles
 nose xd
 
 ## Protocolo del modo online 1vs1

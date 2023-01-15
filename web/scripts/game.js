@@ -11,6 +11,7 @@ var usedTerm = false;
 
 var isOnline = false;
 var onlinePlayer = null;
+var futureOnlineName = null;
 var justSent = false;
 
 var hasStarted = false;
@@ -114,8 +115,16 @@ function newMatch(matchPlayers) {
     
     send('Cada jugador comienza con ' + chipsPerPlayer + ' fichas.');
     send('');
-    send(`Puedes establecer un nombre personalizado para cada jugador con 'setname [número del jugador] [nombre]'.`);
-    send('');
+	
+	if (isOnline) {
+		processInput('myname ' + futureOnlineName);
+		
+		send(`Puedes cambiar tu nombre con 'myname [nombre]'.`);
+	} else {
+    	send(`Puedes establecer un nombre personalizado para cada jugador con 'setname [número del jugador] [nombre]'.`);
+	}
+	
+	send('');
     
     if (isOnline) {
         send(`También puedes chatear durante el juego en línea con 'chat [mensaje]'.`);
@@ -224,17 +233,29 @@ function sendStart() {
 
 var commands = new Map();
 
-function addCommand(name, params, description, requiresMatch, process) {
+function addCommand(name, params, format, description, requiresMatch, process) {
     commands.set(name, Object.create({
         name: name,
         params: params,
+        format: format,
         description: description,
         requiresMatch: requiresMatch,
         process: process
     }));
 }
 
-addCommand('chat', null, 'Envía un mensaje público en el chat', false, (params) => {
+addCommand('commands', 0, '', 'Lista los comandos disponibles', false, (params) => {
+	var tempBuffer = '';
+	
+	commands.forEach(thisCommand => {
+		tempBuffer += thisCommand.name + ' ' + thisCommand.format + '<br>';
+		tempBuffer += '&nbsp;&nbsp;&nbsp;&nbsp;' + thisCommand.description + '<br>';
+	});
+	
+    send(tempBuffer);
+});
+
+addCommand('chat', null, '[mensaje]', 'Envía un mensaje público en el chat', false, (params) => {
     if (isOnline) {
         socket.send('chat ' + onlinePlayer + ' ' + params.join(' '));
     } else {
@@ -242,7 +263,7 @@ addCommand('chat', null, 'Envía un mensaje público en el chat', false, (params
     }
 });
 
-addCommand('botmode', 1, 'Inicia una nueva partida contra bots', false, (params) => {
+addCommand('botmode', 1, '[Número de bots (1 a 4)]', 'Inicia una nueva partida contra bots', false, (params) => {
     if (isOnline && hasStarted) {
         sendMore('No puedes crear una nueva partida mientras estás en modo online.');
         
@@ -258,7 +279,7 @@ addCommand('botmode', 1, 'Inicia una nueva partida contra bots', false, (params)
     }
 });
 
-addCommand('newgame', 1, 'Inicia una nueva partida', false, (params) => {
+addCommand('newgame', 1, '[número de jugadores (1 a 5)]', 'Inicia una nueva partida', false, (params) => {
     if (isOnline && hasStarted) {
         sendMore('No puedes crear una nueva partida mientras estás en modo online.');
         
@@ -272,15 +293,25 @@ addCommand('newgame', 1, 'Inicia una nueva partida', false, (params) => {
     }
 });
 
-addCommand('online', 0, 'Conecta al modo online 1vs1', false, (params) => {
-    if (isOnline == true) {
-        sendMore('No puedes conectarte al modo online 1vs1 mientras estás en una partida online.');
-    } else {
-        doOnline();
-    }
+addCommand('online', 1, '', 'Conecta al modo online 1vs1', false, (params) => {
+	futureOnlineName = params[0];
+	
+	if (futureOnlineName != null) {
+		if (isOnline && hasStarted) {
+			sendMore('No puedes conectarte al modo online 1vs1 mientras estás en una partida online.');
+		} else {
+			doOnline();
+		}
+	}
 });
 
-addCommand('setname', 2, 'Inicia una nueva partida', true, (params) => {
+addCommand('setname', 2, '[número del jugador] [nombre]', 'Cambia el nombre del jugador indicado en una partida local', true, (params) => {
+	if (isOnline) {
+		send(`Comando no disponible en modo online. Utiliza 'myname [nombre]'.`);
+		
+		return;
+	}
+	
     if (isNaN(params[0]) || params[0] < 1 || params[0] > playersCount) {
         send('Número de jugador inválido. En esta partida hay ' + playersCount + ' jugadores.');
     } else {
@@ -294,7 +325,23 @@ addCommand('setname', 2, 'Inicia una nueva partida', true, (params) => {
     }
 });
 
-addCommand('automode', 1, 'Inicia una nueva partida en modo automático', false, (params) => {
+addCommand('myname', 1, '[nombre]', 'Cambia tu nombre en una partida online', true, (params) => {
+	if (!isOnline) {
+		send(`Comando solo disponible en modo online. Utiliza 'setname [número del jugador] [nombre]'.`);
+		
+		return;
+	}
+	
+    if (params[0] != null) {
+        players.get(onlinePlayer).name = params[0];
+        
+        send('Nombre cambiado a ' + params[0] + '.');
+        
+        socket.send('setname ' + onlinePlayer + ' ' + params[0]);
+	}
+});
+
+addCommand('automode', 1, '[número de bots (1 a 5)]', 'Inicia una nueva partida en modo automático', false, (params) => {
     if (isOnline && hasStarted) {
         sendMore('No puedes crear una nueva partida mientras estás en modo online.');
         
@@ -308,7 +355,7 @@ addCommand('automode', 1, 'Inicia una nueva partida en modo automático', false,
     }
 });
 
-addCommand('throwdice', 0, 'Arroja un solo dado', true, (params) => {
+addCommand('throwdice', 0, '', 'Arroja un solo dado', true, (params) => {
     if (isOnline && currentPlayer != onlinePlayer && justSent) {
         sendMore('¡No es tu turno, ' + getCurPlayerStr() + '!');
         
@@ -345,7 +392,7 @@ addCommand('throwdice', 0, 'Arroja un solo dado', true, (params) => {
     }
 });
 
-addCommand('throwdices', 0, 'Arroja ambos dados el mismo tiempo', true, (params) => {
+addCommand('throwdices', 0, '', 'Arroja ambos dados el mismo tiempo', true, (params) => {
     if (isOnline && currentPlayer != onlinePlayer && justSent) {
         sendMore('¡No es tu turno, ' + getCurPlayerStr() + '!');
         
@@ -601,8 +648,10 @@ document.getElementById('writterForm').addEventListener('submit', function(e) {
 send('- JUEGO DEL PUCHERÍN -');
 send(`Para crear una nueva partida, utiliza 'newgame [número de jugadores (1 a 5)]'.`);
 send(`Juega contra la máquina con 'botmode [número de bots (1 a 4)]'.`);
-send(`Deja que la partida se juegue sola con 'automode [número de jugadores (1 a 5)]'.`);
-send(`Accede al modo online 1vs1 con 'online'.`);
+send(`Deja que la partida se juegue sola con 'automode [número de bots (1 a 5)]'.`);
+send(`Accede al modo online 1vs1 con 'online [nombre]'.`);
+send();
+send(`Lista todos los comandos disponibles con 'commands'.`);
 sendStart();
 
 var interactor = document.getElementById('interactor');
@@ -690,8 +739,9 @@ function doOnline() {
                 interactor.innerHTML = 'Tu contrincante ha abandonado la partida.<br><br>';
                 interactor.innerHTML += '<button id="buttonGoBack">Salir</button>';
                 
+				isOnline = false;
                 hasStarted = false;
-                
+				
                 buttonGoBack.addEventListener('click', () => {
                     fillTable();
                 });
@@ -707,7 +757,7 @@ function fillTable() {
     drawEverything();
     
     interactor.innerHTML = '';
-    
+	
     if (!hasStarted) {
         interactor.innerHTML += '<button id="buttonNewMatch">Nueva partida</button> ';
         interactor.innerHTML += '<button id="buttonBotMode">Jugar contra bots</button> ';
@@ -715,60 +765,70 @@ function fillTable() {
         interactor.innerHTML += '<button id="buttonOnline">Online 1vs1</button> ';
         interactor.innerHTML += 'Estado del servidor: <span id="interactorStatus"></span>';
         
-        var statusSocket = new WebSocket('wss://' + host + ':' + port);
-        
-        statusSocket.onopen = function() {
-            statusSocket.send('players');
-        }
-        
-        statusSocket.onerror = function() {
-            if (!isOnline) {
-                interactorStatus.innerHTML += 'Apagado';
-            }
-        }
-        
-        statusSocket.onmessage = function(input) {
-            var inputCommand = input.data.split(' ');
-            
-            if (inputCommand[0] == 'players') {
-                interactorStatus.innerHTML += 'En línea, con ' + inputCommand[1] + ' '
-                        + (inputCommand[1] == 1 ? ' jugador' : 'jugadores');
-                
-                statusSocket.close();
-            }
-        }
-        
-        buttonNewMatch.addEventListener('click', () => {
-            var newPlayersCount = window.prompt('Introduce el número de jugadores (1-5)');
-            
-			if (newPlayersCount != null) {
-				processInput('newgame ' + newPlayersCount);
-			}
-        });
-        
-        buttonBotMode.addEventListener('click', () => {
-            var newPlayersCount = window.prompt('Introduce el número de contrincantes (1-4)');
-            
-			if (newPlayersCount != null) {
-            	processInput('botmode ' + newPlayersCount);
-			}
-        });
-        
-        buttonAutoMode.addEventListener('click', () => {
-            var newPlayersCount = window.prompt('Introduce el número de jugadores (1-5)');
+		if (!isOnline) {
+			var statusSocket = new WebSocket('wss://' + host + ':' + port);
 			
-            if (newPlayersCount != null) {
-            	processInput('automode ' + newPlayersCount);
+			statusSocket.onopen = function() {
+				statusSocket.send('players');
 			}
-        });
-        
-        buttonOnline.addEventListener('click', () => {
-            processInput('online');
-        });
+			
+			statusSocket.onerror = function() {
+				if (!isOnline) {
+					interactorStatus.innerHTML += 'Apagado';
+				}
+			}
+			
+			statusSocket.onmessage = function(input) {
+				var inputCommand = input.data.split(' ');
+				
+				if (inputCommand[0] == 'players') {
+					interactorStatus.innerHTML += 'En línea, con ' + inputCommand[1] + ' '
+							+ (inputCommand[1] == 1 ? ' jugador' : 'jugadores');
+					
+					statusSocket.close();
+				}
+			}
+			
+			buttonNewMatch.addEventListener('click', () => {
+				var newPlayersCount = window.prompt('Introduce el número de jugadores (1-5)');
+				
+				if (newPlayersCount != null) {
+					processInput('newgame ' + newPlayersCount);
+				}
+			});
+			
+			buttonBotMode.addEventListener('click', () => {
+				var newPlayersCount = window.prompt('Introduce el número de contrincantes (1-4)');
+				
+				if (newPlayersCount != null) {
+					processInput('botmode ' + newPlayersCount);
+				}
+			});
+			
+			buttonAutoMode.addEventListener('click', () => {
+				var newPlayersCount = window.prompt('Introduce el número de jugadores (1-5)');
+				
+				if (newPlayersCount != null) {
+					processInput('automode ' + newPlayersCount);
+				}
+			});
+			
+			buttonOnline.addEventListener('click', () => {
+				futureOnlineName = window.prompt('Introduce el nombre de tu jugador');
+				
+				processInput('online ' + futureOnlineName);
+			});
+		}
     } else {
         players.forEach(thisPlayer => {
-            interactor.innerHTML += '(' + thisPlayer.id + ') ' + thisPlayer.name
-					+ ' ' + getChipWord(thisPlayer.chips)
+			var canChangeName = !isOnline || (onlinePlayer == thisPlayer.id);
+			
+            interactor.innerHTML += ''
+					+ '(' + thisPlayer.id + ') '
+					+ (canChangeName ? '<u id="rename' + thisPlayer.id + '">' : '')
+					+ thisPlayer.name
+					+ (canChangeName ? '</u>' : '')
+					+ ': ' + getChipWord(thisPlayer.chips)
 					+ ', ' + getPointWord(thisPlayer.points) + '<br>';
         });
         
@@ -804,6 +864,27 @@ function fillTable() {
                 processInput('throwdice');
             });
         }
+		
+		if (isOnline) {
+			document.getElementById('rename' + onlinePlayer).addEventListener('click', () => {
+				var newName = window.prompt('Introduce tu nuevo nombre');
+				
+				if (newName != null) {
+					processInput('myname ' + newName);
+				}
+			});
+		} else {
+			players.forEach(thisPlayer => {
+				document.getElementById('rename' + thisPlayer.id).addEventListener('click', () => {
+					var newName = window.prompt('Introduce un nuevo nombre para '
+							+ getPlayerStr(thisPlayer.id));
+					
+					if (newName != null) {
+						processInput('setname ' + thisPlayer.id + ' ' + newName);
+					}
+				});
+			});
+		}
     }
 }
 
