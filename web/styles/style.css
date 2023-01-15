@@ -22,12 +22,12 @@ body {
     .tableSide {
         width: 70%;
         margin-left: 15%;
-        height: calc(100% - 210px);
+        height: calc(100% - 235px);
     }
 }
 
 #interactor {
-    height: 180px;
+    height: 210px;
     margin: 20px;
     margin-bottom: 0;
     padding: 5px;

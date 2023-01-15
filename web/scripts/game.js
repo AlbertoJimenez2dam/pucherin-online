@@ -1,7 +1,7 @@
 // 'true' if it must also show alerts and manipulate the board
-var isTableMode = true;
+const isTableMode = true;
 
-// 'true' if it just used the terminal input
+// 'true' if player just used the terminal input
 var usedTerm = false;
 
 var isOnline = false;
@@ -29,48 +29,6 @@ var isAutoMode = false;
 var autoModeId = null;
 
 var tiles = new Map();
-
-function addTile(id) {
-    tiles.set(id, Object.create({
-        id: id,
-        chips: 0
-    }));
-}
-
-function resetTiles() {
-    tiles = new Map();
-    
-    for (var i = 2; i <= 11; i++) {
-        addTile(i);
-    }
-}
-
-function addPlayer(id, chips) {
-    players.set(id, Object.create({
-        id: id,
-        name: 'Jugador' + id,
-        chips: chips,
-        points: 0
-    }));
-}
-
-function getCurPlayerStr() {
-    return getPlayerStr(currentPlayer);
-}
-
-function getPlayerStr(playerId) {
-    return players.get(parseInt(playerId)).name + ' (' + playerId + ')';
-}
-
-function getTotalChips() {
-    var chipsCount = 0;
-    
-    tiles.forEach(thisTile => {
-        chipsCount += thisTile.chips;
-    });
-    
-    return chipsCount;
-}
 
 function getChipWord(chipCount) {
     return chipCount + ' ' + (chipCount == 1 ? 'ficha' : 'fichas');
@@ -227,218 +185,6 @@ function sendStart() {
     scroller.innerHTML += '<span class="start">' + playerName + '@pucherin:</span><span class="startSeparator">~</span> $ ';
 }
 
-var commands = new Map();
-
-function addCommand(name, params, format, description, requiresMatch, process) {
-    commands.set(name, Object.create({
-        name: name,
-        params: params,
-        format: format,
-        description: description,
-        requiresMatch: requiresMatch,
-        process: process
-    }));
-}
-
-addCommand('commands', 0, '', 'Lista los comandos disponibles', false, (params) => {
-	var tempBuffer = '';
-	
-	commands.forEach(thisCommand => {
-		tempBuffer += thisCommand.name + ' ' + thisCommand.format + '<br>';
-		tempBuffer += '&nbsp;&nbsp;&nbsp;&nbsp;' + thisCommand.description + '.<br>';
-	});
-	
-    send(tempBuffer);
-});
-
-addCommand('chat', null, '[mensaje]', 'Envía un mensaje público en el chat', false, (params) => {
-    if (isOnline) {
-        socket.send('chat ' + onlinePlayer + ' ' + params.join(' '));
-    } else {
-        send('No estás conectado.');
-    }
-});
-
-addCommand('botmode', 1, '[Número de bots (1 a 4)]', 'Inicia una nueva partida contra bots', false, (params) => {
-    if (isOnline && hasStarted) {
-        sendMore('No puedes crear una nueva partida mientras estás en modo online.');
-        
-        return;
-    }
-    
-    if (isNaN(params[0]) || params[0] < 1 || params[0] > 4) {
-        sendMore('El número de jugadores debe estar entre 1 y 4.');
-    } else {
-        isBotMode = true;
-        
-        newMatch(parseInt(params[0]) + 1);
-    }
-});
-
-addCommand('newgame', 1, '[número de jugadores (1 a 5)]', 'Inicia una nueva partida', false, (params) => {
-    if (isOnline && hasStarted) {
-        sendMore('No puedes crear una nueva partida mientras estás en modo online.');
-        
-        return;
-    }
-    
-    if (isNaN(params[0]) || params[0] < 1 || params[0] > 5) {
-        sendMore('El número de jugadores debe estar entre 1 y 5.');
-    } else {
-        newMatch(params[0]);
-    }
-});
-
-addCommand('online', 1, '[nombre]', 'Conecta al modo online 1vs1', false, (params) => {
-	futureOnlineName = params[0];
-	
-	if (futureOnlineName != '') {
-		if (isOnline && hasStarted) {
-			sendMore('No puedes conectarte al modo online 1vs1 mientras estás en una partida online.');
-		} else {
-			doOnline();
-		}
-	} else {
-		sendMore('Nombre inválido.');
-	}
-});
-
-addCommand('setname', 2, '[número del jugador] [nombre]', 'Cambia el nombre del jugador indicado en una partida local', true, (params) => {
-	if (isOnline) {
-		send(`Comando no disponible en modo online. Utiliza 'myname [nombre]'.`);
-		
-		return;
-	}
-	
-	if (params[1] == '') {
-		send(`Nombre inválido.`);
-		
-		return;
-	}
-	
-    if (isNaN(params[0]) || params[0] < 1 || params[0] > playersCount) {
-        send('Número de jugador inválido. En esta partida hay ' + playersCount + ' jugadores.');
-    } else {
-        players.get(parseInt(params[0])).name = params[1];
-        
-        send('Nombre del jugador ' + params[0] + ' cambiado a ' + params[1] + '.');
-        
-        if (isOnline) {
-            socket.send('setname ' + params[0] + ' ' + params[1]);
-        }
-    }
-});
-
-addCommand('myname', 1, '[nombre]', 'Cambia tu nombre en una partida online', true, (params) => {
-	if (!isOnline) {
-		send(`Comando solo disponible en modo online. Utiliza 'setname [número del jugador] [nombre]'.`);
-		
-		return;
-	}
-	
-	if (params[0] == '') {
-		send(`Nombre inválido.`);
-		
-		return;
-	}
-	
-    if (params[0] != null) {
-        players.get(onlinePlayer).name = params[0];
-        
-        send('Nombre cambiado a ' + params[0] + '.');
-        
-        socket.send('setname ' + onlinePlayer + ' ' + params[0]);
-	}
-});
-
-addCommand('automode', 1, '[número de bots (1 a 5)]', 'Inicia una nueva partida en modo automático', false, (params) => {
-    if (isOnline && hasStarted) {
-        sendMore('No puedes crear una nueva partida mientras estás en modo online.');
-        
-        return;
-    }
-    
-    if (isNaN(params[0]) || params[0] < 1 || params[0] > 5) {
-        sendMore('El número de jugadores debe estar entre 1 y 5.');
-    } else {
-        startAuto(params[0]);
-    }
-});
-
-addCommand('throwdice', 0, '', 'Arroja un solo dado', true, (params) => {
-    if (isOnline && currentPlayer != onlinePlayer && justSent) {
-        sendMore('¡No es tu turno, ' + getCurPlayerStr() + '!');
-        
-        return;
-    }
-    
-    var thisDice = generateDice();
-    
-    if (lastThrow != 0) {
-        thisDice = lastThrow;
-        lastThrow = 0;
-    } else if (isOnline) {
-        socket.send('throwdice ' + thisDice);
-    }
-    
-    if (dice1Value == 0) {
-        dice1Value = thisDice;
-        
-        send('Dado 1 arrojado por ' + getCurPlayerStr() + '. Obtiene un ' + thisDice + '. Esperando al segundo dado.');
-        
-        if (isTableMode) {
-            tryAlert('Dado 1 arrojado por ' + getCurPlayerStr() + '. Obtiene un ' + thisDice + '. Esperando al segundo dado.');
-        }
-    } else {
-        dice2Value = thisDice;
-        
-        send('Dado 2 arrojado por ' + getCurPlayerStr() + '. Obtiene un ' + thisDice + '.');
-        
-        if (isTableMode) {
-            tryAlert('Dado 2 arrojado por ' + getCurPlayerStr() + '. Obtiene un ' + thisDice + '.')
-        }
-        
-        processTurn();
-    }
-});
-
-addCommand('throwdices', 0, '', 'Arroja ambos dados el mismo tiempo', true, (params) => {
-    if (isOnline && currentPlayer != onlinePlayer && justSent) {
-        sendMore('¡No es tu turno, ' + getCurPlayerStr() + '!');
-        
-        return;
-    }
-    
-    var thisDice1 = generateDice();
-    var thisDice2 = generateDice();
-    
-    if (lastThrow1 != 0) {
-        thisDice1 = lastThrow1;
-        lastThrow1 = 0;
-    }
-    
-    if (lastThrow2 != 0) {
-        thisDice2 = lastThrow2;
-        lastThrow2 = 0;
-    } else if (isOnline) {
-        socket.send('throwdices ' + thisDice1 + ' ' + thisDice2);
-    }
-    
-    if (dice1Value == 0) {
-        dice1Value = thisDice1;
-        dice2Value = thisDice2;
-        
-        send('Dado 1 arrojado por ' + getCurPlayerStr() + '. Obtiene un ' + thisDice1 + '.');
-        send('Dado 2 arrojado por ' + getCurPlayerStr() + '. Obtiene un ' + thisDice2 + '.');
-        
-        processTurn();
-    } else {
-        send(getCurPlayerStr() + ` ha tratado de arrojar ambos dados simultáneamente `
-                + `tras arrojar el primer dado, el cual tiene un ` + dice1Value
-                + `. Ahora debe arrojar el segundo dado con 'throwdice' porque no lo ha pensado mucho.`);
-    }
-});
-
 function generateDice() {
     return Math.floor(Math.random() * 6) + 1;
 }
@@ -579,34 +325,6 @@ function tryLuck() {
     dicesValue = 0;
 }
 
-function printStatus() {
-    send('');
-    send('- Estado del tablero -');
-    
-    tiles.forEach(thisTile => {
-        if (thisTile.id == 7) {
-            return;
-        }
-        
-        send('Casilla ' + thisTile.id + ', número de fichas: ' + thisTile.chips);
-    });
-    
-    send('Número de fichas en el puchero: ' + tiles.get(7).chips);
-    send('');
-    
-    printPlayers();
-}
-
-function printPlayers() {
-    send('- Estado de los jugadores -');
-    
-    players.forEach(thisPlayer => {
-        send(getPlayerStr(thisPlayer.id) + ' Fichas: ' + thisPlayer.chips + ' Puntos: ' + thisPlayer.points);
-    });
-    
-    send('');
-}
-
 function processInput(inputValue) {
     send(inputValue);
     
@@ -666,7 +384,7 @@ document.getElementById('writterForm').addEventListener('submit', function(e) {
     inputValue.value = '';
 }, false);
 
-send('- JUEGO DEL PUCHERÍN -');
+send('- PUCHERÍN ONLINE -');
 send(`Para crear una nueva partida, utiliza 'newgame [número de jugadores (1 a 5)]'.`);
 send(`Juega contra la máquina con 'botmode [número de bots (1 a 4)]'.`);
 send(`Deja que la partida se juegue sola con 'automode [número de bots (1 a 5)]'.`);
@@ -784,10 +502,10 @@ function fillTable() {
     interactor.innerHTML = '';
 	
     if (!hasStarted) {
-        interactor.innerHTML += '&nbsp;<b>- Pucherín Online -</b><br><br>';
-        interactor.innerHTML += '<button id="buttonNewMatch">Nueva partida</button> Varios jugadores en el mismo equipo.<br>';
-        interactor.innerHTML += '<button id="buttonBotMode">Jugar contra bots</button> Juega una aprtida individual contra bot<br>';
-        interactor.innerHTML += '<button id="buttonAutoMode">Modo automático</button> Deja que los bots compelten una partida.<br><br>';
+		interactor.innerHTML += '<b>- Juego del Pucherín -</b><br><br>';
+        interactor.innerHTML += '<button id="buttonNewMatch">Nueva partida</button> Varios jugadores en un mismo dispositivo.<br>';
+        interactor.innerHTML += '<button id="buttonBotMode">Jugar contra bots</button> Juega una partida individual contra bots.<br>';
+        interactor.innerHTML += '<button id="buttonAutoMode">Modo automático</button> Deja que los bots completen una partida.<br>';
         interactor.innerHTML += '<button id="buttonOnline">Online 1vs1</button> ';
         interactor.innerHTML += 'Estado del servidor: <span id="interactorStatus"></span>';
         
@@ -800,7 +518,7 @@ function fillTable() {
 			
 			statusSocket.onerror = function() {
 				if (!isOnline) {
-					interactorStatus.innerHTML += 'Apagado';
+					interactorStatus.innerHTML += 'Apagado.';
 				}
 			}
 			
@@ -809,7 +527,7 @@ function fillTable() {
 				
 				if (inputCommand[0] == 'players') {
 					interactorStatus.innerHTML += 'En línea, con ' + inputCommand[1] + ' '
-							+ (inputCommand[1] == 1 ? ' jugador' : 'jugadores');
+							+ (inputCommand[1] == 1 ? ' jugador' : 'jugadores') + '.';
 					
 					statusSocket.close();
 				}

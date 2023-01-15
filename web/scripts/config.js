@@ -1,5 +1,5 @@
-var protocol = 'wss';
-var host = 'pucherin.alcosmos.net';
-var port = '443';
+const protocol = 'wss'; //'ws';
+const host = 'pucherin.alcosmos.net'; //'localhost';
+const port = '443';
 
-var totalChips = 50;
+const totalChips = 50;
