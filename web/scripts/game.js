@@ -1,8 +1,3 @@
-var host = 'pucherin.alcosmos.net';
-var port = '443';
-
-var totalChips = 50;
-
 // 'true' if it must also show alerts and manipulate the board
 var isTableMode = true;
 
@@ -117,8 +112,6 @@ function newMatch(matchPlayers) {
     send('');
 	
 	if (isOnline) {
-		processInput('myname ' + futureOnlineName);
-		
 		send(`Puedes cambiar tu nombre con 'myname [nombre]'.`);
 	} else {
     	send(`Puedes establecer un nombre personalizado para cada jugador con 'setname [número del jugador] [nombre]'.`);
@@ -188,7 +181,10 @@ function nextTurn() {
     
     send('- Turno de ' + getCurPlayerStr() + ' -');
     
-    if (!isBotMode && currentPlayer != 1) {
+    if ((isOnline && currentPlayer == onlinePlayer)
+		|| (isBotMode && currentPlayer == 1)
+		|| (!isOnline && !isBotMode && !isAutoMode)
+	) {
         send(`Arroja un solo dado con 'throwdice'. Arroja ambos con 'throwdices'.`);
     }
 }
@@ -249,7 +245,7 @@ addCommand('commands', 0, '', 'Lista los comandos disponibles', false, (params) 
 	
 	commands.forEach(thisCommand => {
 		tempBuffer += thisCommand.name + ' ' + thisCommand.format + '<br>';
-		tempBuffer += '&nbsp;&nbsp;&nbsp;&nbsp;' + thisCommand.description + '<br>';
+		tempBuffer += '&nbsp;&nbsp;&nbsp;&nbsp;' + thisCommand.description + '.<br>';
 	});
 	
     send(tempBuffer);
@@ -293,21 +289,29 @@ addCommand('newgame', 1, '[número de jugadores (1 a 5)]', 'Inicia una nueva par
     }
 });
 
-addCommand('online', 1, '', 'Conecta al modo online 1vs1', false, (params) => {
+addCommand('online', 1, '[nombre]', 'Conecta al modo online 1vs1', false, (params) => {
 	futureOnlineName = params[0];
 	
-	if (futureOnlineName != null) {
+	if (futureOnlineName != '') {
 		if (isOnline && hasStarted) {
 			sendMore('No puedes conectarte al modo online 1vs1 mientras estás en una partida online.');
 		} else {
 			doOnline();
 		}
+	} else {
+		sendMore('Nombre inválido.');
 	}
 });
 
 addCommand('setname', 2, '[número del jugador] [nombre]', 'Cambia el nombre del jugador indicado en una partida local', true, (params) => {
 	if (isOnline) {
 		send(`Comando no disponible en modo online. Utiliza 'myname [nombre]'.`);
+		
+		return;
+	}
+	
+	if (params[1] == '') {
+		send(`Nombre inválido.`);
 		
 		return;
 	}
@@ -328,6 +332,12 @@ addCommand('setname', 2, '[número del jugador] [nombre]', 'Cambia el nombre del
 addCommand('myname', 1, '[nombre]', 'Cambia tu nombre en una partida online', true, (params) => {
 	if (!isOnline) {
 		send(`Comando solo disponible en modo online. Utiliza 'setname [número del jugador] [nombre]'.`);
+		
+		return;
+	}
+	
+	if (params[0] == '') {
+		send(`Nombre inválido.`);
 		
 		return;
 	}
@@ -465,9 +475,8 @@ function processTurn() {
         if (curPlayer.chips == 0) {
             sendMore('A' + getCurPlayerStr() + ' no le quedan fichas que añadir al puchero.');
             
-            tryLuck();
-            
-            return;
+            //tryLuck();
+            //return;
         } else {
             curPlayer.chips -= 1;
             curTile.chips += 1;
@@ -484,11 +493,20 @@ function processTurn() {
             }
         }
     } else if (dicesValue == 12) {
-        curPlayer.points += tiles.get(7).chips;
-        tiles.get(7).chips = 0;
-        
-        sendMore('¡DING! Con un 12 en los dados, te llevas el contenido del puchero (' + getChipWord(tiles.get(7).chips)
-                + ').<br>Ahora tienes ' + getChipWord(curPlayer.chips) + ' y ' + getPointWord(curPlayer.points) + '.');
+		if (curPlayer.chips == 0) {
+			sendMore('¡12! ¡12! ¡Un 12! ya que a ' + getCurPlayerStr()
+					+ ' no le quedan fichas, se lleva TODAS las fichas del tablero.');
+            
+            players.get(currentPlayer).chips += getTotalChips();
+            
+            endMatch();
+		} else {
+			curPlayer.points += tiles.get(7).chips;
+			tiles.get(7).chips = 0;
+			
+			sendMore('¡DING! Con un 12 en los dados, te llevas el contenido del puchero (' + getChipWord(tiles.get(7).chips)
+					+ ').<br>Ahora tienes ' + getChipWord(curPlayer.chips) + ' y ' + getPointWord(curPlayer.points) + '.');
+		}
     } else {
         if (curPlayer.chips == 0) {
             curPlayer.points += curTile.chips;
@@ -498,9 +516,8 @@ function processTurn() {
             
             curTile.chips = 0;
             
-            tryLuck();
-            
-            return;
+            //tryLuck();
+            //return;
         } else {
             curPlayer.chips -= 1;
             curTile.chips += 1;
@@ -526,20 +543,24 @@ function processTurn() {
     }
     
     if (isBotMode && currentPlayer != 1 && hasStarted) {
-        alert(alertBuffer);
-        alertBuffer = '';
+		if (alertBuffer != '') {
+			alert(alertBuffer);
+			
+			alertBuffer = '';
+		}
         
         dice1Value = generateDice();
         dice2Value = generateDice();
         
         if (currentPlayer != 1) {
-            alertBuffer += 'Turno de ' + getCurPlayerStr() + '.\n\n';
+            tryAlert('Turno de ' + getCurPlayerStr() + '.\n');
         }
         
         processTurn();
     }
 }
 
+// Deleted mode, back when you had a second opportunity to get a 12
 function tryLuck() {
     send();
     send(`¡DING, DING, DIIING! Ya que a ` + getCurPlayerStr() + ` no le quedaban fichas, es hora de probar suerte.`);
@@ -664,7 +685,7 @@ function doOnline() {
     interactor.innerHTML = 'Conectando con el servidor...';
     send('Conectando con el servidor...');
     
-    socket = new WebSocket('wss://' + host + ':' + port);
+    socket = new WebSocket(protocol + '://' + host + ':' + port);
     
     socket.onopen = function() {
         interactor.innerHTML = '<br>Handshake...';
@@ -706,6 +727,8 @@ function doOnline() {
                 onlinePlayer = parseInt(inputCommand[1]);
                 
                 processInput('newgame 2')
+				
+				processInput('myname ' + futureOnlineName);
                 break;
             case 'throwdice':
                 lastThrow = parseInt(inputCommand[1]);
@@ -721,8 +744,10 @@ function doOnline() {
             case 'setname':
                 players.get(parseInt(inputCommand[1])).name = inputCommand[2];
                 
+				send();
                 send('El nombre del jugador ' + inputCommand[1] + ' ha sido cambiado a ' + inputCommand[2] + '.');
-                
+                sendStart();
+				
                 fillTable();
                 break;
             case 'chat':
@@ -759,14 +784,15 @@ function fillTable() {
     interactor.innerHTML = '';
 	
     if (!hasStarted) {
-        interactor.innerHTML += '<button id="buttonNewMatch">Nueva partida</button> ';
-        interactor.innerHTML += '<button id="buttonBotMode">Jugar contra bots</button> ';
-        interactor.innerHTML += '<button id="buttonAutoMode">Modo automático</button><br><br>';
+        interactor.innerHTML += '&nbsp;<b>- Pucherín Online -</b><br><br>';
+        interactor.innerHTML += '<button id="buttonNewMatch">Nueva partida</button> Varios jugadores en el mismo equipo.<br>';
+        interactor.innerHTML += '<button id="buttonBotMode">Jugar contra bots</button> Juega una aprtida individual contra bot<br>';
+        interactor.innerHTML += '<button id="buttonAutoMode">Modo automático</button> Deja que los bots compelten una partida.<br><br>';
         interactor.innerHTML += '<button id="buttonOnline">Online 1vs1</button> ';
         interactor.innerHTML += 'Estado del servidor: <span id="interactorStatus"></span>';
         
 		if (!isOnline) {
-			var statusSocket = new WebSocket('wss://' + host + ':' + port);
+			var statusSocket = new WebSocket(protocol + '://' + host + ':' + port);
 			
 			statusSocket.onopen = function() {
 				statusSocket.send('players');
