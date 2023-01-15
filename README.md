@@ -4,7 +4,10 @@ Implementación del antiguo juego de mesa español "El Pucherín".
 Versión 1.0.
 
 [Demo funcional, incluyendo servidor](https://albertojimenez2dam.github.io/pucherin-online/web)
+
 [Demo funcional alternativa](https://alcosmos.net/pucherin)
+
+**Nota:** El servidor puede fallar y dejar de crear partidas, por lo que las demos de arriba pueden no funcionar en modo online 1vs1. En ese caso, habrá que ejecutar un servidor local con los parámetros de configuración comentados en 'web_config.js'.
 
 ## Modos de juego
 * **Partida local**<br>
